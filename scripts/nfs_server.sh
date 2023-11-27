@@ -33,13 +33,10 @@ cp ../exports/exports /etc/exports
 
 #Modificamos la variable #Modificamos el archivo exports.
 
-sed -i "s/NFS_FRONTEND_NETWORK/$NFS_FRONTEND_NETWORK/" /etc/exports
+sed -i "s#NFS_FRONTEND_NETWORK#$NFS_FRONTEND_NETWORK#" /etc/exports
 
 #Reiniciamos el servicio.
 
 systemctl restart nfs-kernel-server
 
 
-
-172.31.0.0/16
-172.31.0.0/16

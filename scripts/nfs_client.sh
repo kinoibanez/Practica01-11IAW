@@ -16,3 +16,7 @@ source .env
 #Instalamos el paquete necesario de NFS client
 
 sudo apt install nfs-common -y
+
+#Montamos
+
+sudo mount 172.31.94.238:/var/www/html /var/www/html
