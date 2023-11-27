@@ -1,0 +1,1 @@
+/var/www/html NFS_FRONTEND_NETWORK(rw,sync,no_root_squash,no_subtree_check)
