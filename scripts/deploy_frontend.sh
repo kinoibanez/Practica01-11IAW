@@ -94,3 +94,5 @@ wp rewrite structure '/%postname%/' --path=/var/www/html --allow-root
 #Modificamos los permisos de /var/www/html
 
 chown -R www-data:www-data /var/www/html
+
+sed -i "/COLLATE/a \$_SERVER['HTTPS'] = 'on';" /var/www/html/wp-config.php
