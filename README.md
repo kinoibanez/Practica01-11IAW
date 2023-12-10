@@ -381,4 +381,305 @@ Este repositorio es para la Práctica 1 apartado 11 de IAW
 
 - Para el cliente tendremos que hacer uso de dos *_scripts_* que tendremos que ir lanzando de manera conjunta en ambos clientes. Como en este caso son los *_FRONTS_*
 
-    El primer script que encontramos es el siguiente:
+    El primer script que encontramos es el siguiente llamado *_install_nfs_client*:
+
+    ```
+    #!/bin/bash
+
+    #Esto muestra todos los comandos que se van ejecutando
+    set -ex 
+    #Actualizamos los repositorios
+    apt update
+
+    #Actualizamos los paquetes de la máquina 
+
+    #apt upgrade -y
+
+    #Incluimos las variables del archivo .env
+
+    source .env
+
+    #Instalamos el paquete para el cliente
+
+    apt install nfs-common -y
+
+    #Creamos el punto de montaje
+    mount $NFS_SERVER_PRIVATE_IP:/var/www/html /var/www/html
+
+    #Añadimos una linea de configuracion al archivo /etc/fstab para que el punto de montaje se monte automaticamente despues de cada reinicio.
+
+    echo $NFS_SERVER_PRIVATE_IP:/var/www/html /var/www/html  nfs auto,nofail,noatime,nolock,intr,tcp,actimeo=1800 0 0 >> /etc/fstab
+
+    #El echo añade la linea a "mano" dentro del archivo /etc/fstab
+
+    ```
+
+- Lo funcionalidad de este script es instalar el paquete para el cliente, crear el montaje y habilitar una linea de configuración de manera manual en el directorio `/etc/fstab` para que cuando se reinice siga esa misma configuración.
+
+    Los diferentes parámetros que podemos encontrar son los siguientes:
+
+    - `nfs: Tipo de archivos`
+    - `auto: Lo monta automaticamente`
+    - `nofail: Permite que el sistema siempre se inicie aunque el montaje falle`
+    - `noatime: No actualiza el tiempo`
+    - `nolock: Deshabilitar el bloqueo de archivos NFS`
+    - `intr: Si el servidor no responde, las operaciones se interrumpen`
+    - `>> /etc/fstab: Haciendo uso del comando echo, agregamos y modificamos la linea dentro del archivo que estamos indicandole`
+
+    La variable que estamos utilizando es la siguiente `$NFS_SERVER_PRIVATE_IP` que será la IP privada de nuestro servidor NFS.
+
+    ![](images/cap6.png)
+
+
+### Segundo Scrit del cliente.
+
+- El siguiente script que tendremos que ejecutar en el cliente es el siguiente: `nfs_client.sh` que realiza una serie de funciones parecidas al anterior.
+
+
+
+    ```
+    #!/bin/bash
+
+    #Esto muestra todos los comandos que se van ejecutando
+    set -ex 
+    #Actualizamos los repositorios
+    apt update
+
+    #Actualizamos los paquetes de la máquina 
+
+    #apt upgrade -y
+
+    #Incluimos las variables del archivo .env
+
+    source .env
+
+    #Instalamos el paquete necesario de NFS client
+
+    sudo apt install nfs-common -y
+
+    #Montamos
+
+    sudo mount 172.31.94.238:/var/www/html /var/www/html
+
+    ```
+
+
+### Comandos utiles de uso
+
+- Existe un comando llamado `df -h` que podemos usar en el *_NFS_SERVER_* para observar que se ha montado la IP de manera correcta y los archivos que se han montado.
+
+    El parámetro `-h` permite que el tamaño de los archivos sea legible.
+
+
+- Si después de todo estos scripts queremos comprobar que el valanceador realiza un función podemos acceder a nuestro nombre de dominio declarado en las variables y que anteriormente hemos de tener registrado, por ejemplo en mi caso se llama `practica-https.ddns.net` y lo tengo registrado con la `IP pública` del balanceador en [La página Web de NO-IP](https://www.noip.com/es-MX/login)
+
+    Si queremos comprobar su correcto funcionamiento accedemos a nuestro dominio por URL y hacemos `F5` y si accedemos al directorio de Apache: `/var/log/apache2/access.log` podremos ver cuando se realizan las peticiones de cada uno.
+
+# Script para *_DEPLOY FRONT_END AND BACK_END_*
+
+
+- Primero vamos hablar del *_deploy_backend_* debido a que este script como hemos configurado anteriormente, es el encargado de la instalación, creación y configuración de la base de datos. Es decir, siempre que digamos de ejecutar este script borraremos la base de datos del sistema y por lo tanto tendremos que hacerlo todo de nuevo, asi que ojo.
+
+    ```
+    #!/bin/bash
+
+    #Esto muestra todos los comandos que se van ejecutando
+    set -ex 
+    #Actualizamos los repositorios
+    apt update
+
+    #Actualizamos los paquetes de la máquina 
+
+    #apt upgrade -y
+
+    #Incluimos las variables del archivo .env
+
+    source .env
+    # Creamos la base de datos y el usuario de base de datos.
+
+    mysql -u root <<< "DROP DATABASE IF EXISTS $WORDPRESS_DB_NAME"
+    mysql -u root <<< "CREATE DATABASE $WORDPRESS_DB_NAME"
+    mysql -u root <<< "DROP USER IF EXISTS $WORDPRESS_DB_USER@$IP_CLIENTE_MYSQL"
+    mysql -u root <<< "CREATE USER $WORDPRESS_DB_USER@$IP_CLIENTE_MYSQL IDENTIFIED BY '$WORDPRESS_DB_PASSWORD'"
+    mysql -u root <<< "GRANT ALL PRIVILEGES ON $WORDPRESS_DB_NAME.* TO $WORDPRESS_DB_USER@$IP_CLIENTE_MYSQL"
+
+    ```
+
+    Como en prácticas anteriores nuestras variables estan declaradas en nuestro archivo `.env` ( Al final de la práctica adjuntaré una foto con mi configuración del archivo `.env`)
+
+
+
+## Deploy FRONT_END
+
+- El deploy del *_FRONT_* como en prácticas anteriores, conlleva la instalación de Wordpress, configuración de manera automática, configuración ede su propio directorio, archivos como `wp-cli` que es una interfaz por linea de comandos, etc...
+
+
+- Cabe recalcar que en este script todo la instalación tiene que estar hecha de manera autónoma, por lo tanto las variables que encontremos estarán declaradas anteriormente en `.env`
+
+
+    ```
+    #!/bin/bash
+
+    #Esto muestra todos los comandos que se van ejecutando
+    set -ex 
+    #Actualizamos los repositorios
+    apt update
+
+    #Actualizamos los paquetes de la máquina 
+
+    #apt upgrade -y
+
+    #Incluimos las variables del archivo .env
+
+    source .env
+
+    #Eliminamos instalaciones previas 
+
+    rm -rf /tmp/wp-cli.phar
+
+    # Descargamos la utilidad de wp-cli
+
+    wget https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -P /tmp
+
+    #Le asignamos permisos de ejecución al archivo wp-cli.phar
+
+    chmod +x /tmp/wp-cli.phar
+
+    #Movemos el archivo al directorio /usr/local/bin que almacena el listado de comandos del sistema.
+
+    mv /tmp/wp-cli.phar /usr/local/bin/wp #wp es renombrado
+
+
+    #Eliminamos instalaciones previas de wordpress
+
+    rm -rf /var/www/html/*
+
+    #Descargamos el codigo fuente de wordpress en /var/wwW/html
+
+    wp core download --locale=es_ES --path=/var/www/html --allow-root
+
+    #Crear el archivo .config, podemos comprobar haciendo un cat cat /var/www/html/wp-config.php si estan bien las variables
+
+    wp config create \
+    --dbname=$WORDPRESS_DB_NAME \
+    --dbuser=$WORDPRESS_DB_USER \
+    --dbpass=$WORDPRESS_DB_PASSWORD \
+    --dbhost=$WORDPRESS_DB_HOST \
+    --path=/var/www/html \
+    --allow-root
+
+
+    #Instalamos el directorio WORDPRESS con las variables de configuración en .env
+
+    wp core install \
+    --url=$CERTIFICATE_DOMAIN \
+    --title="$WORDPRESS_TITLE"\
+    --admin_user=$WORDPRESS_ADMIN_USER \
+    --admin_password=$WORDPRESS_ADMIN_PASS \
+    --admin_email=$WORDPRESS_ADMIN_EMAIL \
+    --path=/var/www/html \
+    --allow-root
+
+    #Copiamos el archivo .htaccess
+
+    cp ../htaccess/.htaccess /var/www/html/
+
+
+    # Descargamos un plugin para la seguridad de WordPress
+
+    sudo wp plugin install wp-staging --activate --path=/var/www/html --allow-root
+
+
+    #Descargamos un tema cualquiera para la configuración
+
+    #sudo wp  theme install Hestia --activate list --path=/var/www/html --allow-root
+
+    #Descargamos un pluggin cualquiera.
+
+    wp plugin install bbpress --activate --path=/var/www/html --allow-root
+
+    #Links
+
+    wp plugin install wps-hide-login --activate --path=/var/www/html --allow-root
+
+
+    #Modificar nombres
+
+    wp option update whl_page "NotFound" --path=/var/www/html --allow-root
+
+    #Coniguramos el nombre de la entrada 
+
+    wp rewrite structure '/%postname%/' --path=/var/www/html --allow-root
+
+    #Modificamos los permisos de /var/www/html
+
+    chown -R www-data:www-data /var/www/html
+
+    sed -i "/COLLATE/a \$_SERVER['HTTPS'] = 'on';" /var/www/html/wp-config.php
+
+    ```
+
+
+    Las lineas del código las hemos comentado anteriormente en otras prácticas, de todos modos cada linea tiene su correspondiente explicación pero hay algunos parámetros que caben recalcar como puede ser el uso del `sed -i` en la siguiente linea ` sed -i "/COLLATE/a \$_SERVER['HTTPS'] = 'on';" /var/www/html/wp-config.php` que lo modificará para que `HTTPS este ON` siempre.
+
+
+# Instalación del `Lest Encrypt`
+
+- Como siguiente apartado hacemos uso del siguiente scritp que hemos utilizado en prácticas anteriores, con las respectivas variables del `.env` configuradas para descargar la herramienta *_cerbot_* que nos permite registrar un servicio seguro *_HTTPS_* con el nombre de nuestro dominio.
+
+    ```
+
+    #!/bin/bash
+
+    #Esto muestra todos los comandos que se van ejecutando
+    set -ex 
+    #Actualizamos los repositorios
+    apt update
+
+    #Actualizamos los paquetes de la máquina 
+
+    #apt upgrade -y
+
+    #Importamos el archivo de variables .env
+
+    source .env
+
+    #Instalamos y Actualizamos snapd.
+
+    snap install core
+    snap refresh core
+
+    # Eliminamos cualquier instalación previa de certobot con apt.
+
+    apt remove certbot
+
+    # Instalamos el cliente de Certbot con snapd.
+
+    snap install --classic certbot
+
+    # Creamos un alias para la aplicación cerbot.
+
+    sudo ln -sf /snap/bin/certbot /usr/bin/certbot
+
+    # Obtenemos el certificado y configuramos el servidor web Apache.
+
+    #sudo certbot --apache
+
+    #Ejecutamos el comando certbot.
+    certbot --apache -m $CERTIFICATE_EMAIL --agree-tos --no-eff-email -d $CERTIFICATE_DOMAIN --non-interactive
+
+
+    #Con el siguiente comando podemos comprobar que hay un temporizador en el sistema encargado de realizar la renovación de los certificados de manera automática.
+
+    #systemctl list-timers
+
+    ```
+
+
+## Imágen de mi archivo .env 
+
+- Como hemos utilizado una cantidad de variables que son diferentes adjunto una captura de mi archivo `.env` para que podamos visualizar el nombre de cada una y relacionarla con su respectiva configuración en cada uno de los scripts.
+
+- Al final de todo la funcionalidad de esta práctica es que tengamos en cada uno de los *_FRONT_* instalados *_Word_Press_*, que el *_balanceador_* funcione de manera correcta y que compartan todo en el directorio `var/ww/html` de nuestro servidor `NFS SERVER`
+
+    ![](images/cap7.png)
